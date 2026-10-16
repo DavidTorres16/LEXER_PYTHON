@@ -11,6 +11,8 @@ SIMBOLOS = [
     ("=", "RELACIONAL"),
 ]
 
+OPERADORES = ["+", "-", "*"]       # punto 6.3
+
 COMENTARIO = "//"                  # punto 6
 
 
@@ -19,6 +21,14 @@ def buscar_simbolo(texto, i):
         if texto.startswith(simbolo, i):
             return simbolo, tipo
     return None
+
+
+def es_negativo(texto, i, tokens):
+    # "-" pegado a un dígito es un número negativo, salvo que venga después de un valor:
+    # en "x := -5" es negativo, en "saldo-5" es una resta
+    if texto[i] != "-" or i + 1 >= len(texto) or not texto[i + 1].isdigit():
+        return False
+    return len(tokens) == 0 or tokens[-1][0] not in ["NUMERO", "IDENTIFICADOR"]
 
 
 def tokenizar(texto):
@@ -60,17 +70,24 @@ def tokenizar(texto):
             else:
                 tokens.append(("IDENTIFICADOR", palabra, linea, columna))
 
-        # 5. Número entero, con "-" opcional pegado al primer dígito
-        elif c.isdigit() or (c == "-" and i + 1 < len(texto) and texto[i + 1].isdigit()):
+        # 5. Número entero o decimal (punto 6.2), con "-" opcional pegado al primer dígito
+        elif c.isdigit() or es_negativo(texto, i, tokens):
             inicio = i
             i += 1                                # se consume el signo o el primer dígito
-            while i < len(texto) and texto[i].isdigit():
+            puntos = 0
+            while i < len(texto) and (texto[i].isdigit() or texto[i] == "."):
+                if texto[i] == ".":
+                    puntos += 1
                 i += 1
-            tokens.append(("NUMERO", texto[inicio:i], linea, columna))
+            numero = texto[inicio:i]
+            if puntos > 1 or numero.endswith("."):
+                raise SyntaxError(f"Línea {linea}, columna {columna}: decimal mal formado '{numero}' (lleva un solo punto y dígitos después)")
+            tokens.append(("NUMERO", numero, linea, columna))
 
-        # 6. "-" suelto: en ColombiaScript no hay resta, el signo va pegado al número
-        elif c == "-":
-            raise SyntaxError(f"Línea {linea}, columna {columna}: el signo '-' debe ir pegado a un número (ej. -5)")
+        # 6. Operadores aritméticos de un carácter (punto 6.3): +  -  *
+        elif c in OPERADORES:
+            tokens.append(("OPERADOR", c, linea, columna))
+            i += 1
 
         # 7. Símbolos de uno o más caracteres (punto 5): :=  >=  <=  >  <  =
         elif simbolo is not None:
@@ -85,7 +102,7 @@ def tokenizar(texto):
         elif c == ":":
             raise SyntaxError(f"Línea {linea}, columna {columna}: se esperaba '=' después de ':' (la asignación se escribe :=)")
 
-        # 9. Cadena entre comillas dobles (solo se usa después de mostrar)
+        # 9. Cadena entre comillas dobles (punto 6.2): se lee hasta la comilla de cierre
         elif c == '"':
             inicio = i + 1
             i += 1
@@ -136,9 +153,9 @@ print()
 print("== Errores léxicos ==")
 pruebas_con_error = [
     "Pille edad : 18",            # falta el = de :=
-    "Pille precio := 18.5",       # no hay decimales
+    "Pille precio := 3.4.5",      # decimal con dos puntos
     "Pille saldo := $5000",       # símbolo que no existe en el lenguaje
-    "Pille frio := - 5",          # signo separado del número
+    "Pille precio := 18.",        # decimal sin dígitos después del punto
     'Si x = 1 Eche mostrar "hola',  # cadena sin cerrar
     "Pille a := 1\nPille b := @",   # error en la línea 2
 ]
@@ -149,7 +166,7 @@ for prueba in pruebas_con_error:
         print("Error:", e)
 
 
-# ---------------- Pruebas de los puntos 4, 5, 6 y 6.1 ----------------
+# ---------------- Pruebas de los puntos 4, 5, 6, 6.1, 6.2 y 6.3 ----------------
 # Lo ESPERADO se calculó a mano ANTES de ejecutar (columna = posición del primer
 # carácter de la pieza, contando desde 1 en cada línea). Después se compara con la
 # salida real del lexer.
@@ -233,5 +250,36 @@ probar("6.1", "un comentario antes no descuadra la línea",
 probar("6.1", "la columna cuenta los espacios del comienzo",
        "  Pille x := #",
        "Línea 1, columna 14: carácter inesperado '#'")
+
+print("== Punto 6.2: decimales y cadenas ==")
+probar("6.2", "3.14 sale como un solo NUMERO",
+       "Pille precio := 3.14",
+       [("TIPO", "Pille", 1, 1), ("IDENTIFICADOR", "precio", 1, 7),
+        ("ASIGNACION", ":=", 1, 14), ("NUMERO", "3.14", 1, 17)])
+probar("6.2", "decimal con dos puntos produce error",
+       "Pille precio := 3.4.5",
+       "Línea 1, columna 17: decimal mal formado '3.4.5' (lleva un solo punto y dígitos después)")
+probar("6.2", "cadena sin cerrar reporta la línea donde empezó",
+       'Pille a := 1\nSi a = 1 Eche mostrar "hola',
+       "Línea 2, columna 23: cadena sin cerrar, falta la comilla final")
+
+print("== Punto 6.3: operadores + - * ==")
+probar("6.3", "operadores con espacios",
+       "Pille total := a + 5 * 2",
+       [("TIPO", "Pille", 1, 1), ("IDENTIFICADOR", "total", 1, 7),
+        ("ASIGNACION", ":=", 1, 13), ("IDENTIFICADOR", "a", 1, 16),
+        ("OPERADOR", "+", 1, 18), ("NUMERO", "5", 1, 20),
+        ("OPERADOR", "*", 1, 22), ("NUMERO", "2", 1, 24)])
+probar("6.3", "operadores sin espacios",
+       "Pille total:=a+5*2",
+       [("TIPO", "Pille", 1, 1), ("IDENTIFICADOR", "total", 1, 7),
+        ("ASIGNACION", ":=", 1, 12), ("IDENTIFICADOR", "a", 1, 14),
+        ("OPERADOR", "+", 1, 15), ("NUMERO", "5", 1, 16),
+        ("OPERADOR", "*", 1, 17), ("NUMERO", "2", 1, 18)])
+probar("6.3", "-5 después de := es negativo, el otro - es resta",
+       "Pille x := -5 - 2",
+       [("TIPO", "Pille", 1, 1), ("IDENTIFICADOR", "x", 1, 7),
+        ("ASIGNACION", ":=", 1, 9), ("NUMERO", "-5", 1, 12),
+        ("OPERADOR", "-", 1, 15), ("NUMERO", "2", 1, 17)])
 
 print(f"Resumen: {sum(resultados)} de {len(resultados)} pruebas coinciden con lo esperado a mano.")
