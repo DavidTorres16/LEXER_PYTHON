@@ -1,0 +1,17 @@
+// Programa de demostración de ColombiaScript: asistente de decisiones
+Pille edad := 20
+Pille temperatura := 31.5
+Pille saldo := 45000.0
+Pille deuda := -20000
+Pille tiene_permiso := Melo
+Pille esta_lloviendo := Paila
+
+/* Reglas del sistema:
+   cada una empieza con Si y termina con Eche
+   Tin es Y, Tan es O */
+Si edad >= 18 Eche permitir_entrada
+Si temperatura >= 30 Eche encender_ventilador
+Si saldo <= 0 Eche mostrar "Paila, no hay lucas"
+Si tiene_permiso = Paila Tin edad < 18 Eche negar_entrada // mayor de edad y sin permiso
+Si esta_lloviendo = Melo Tan temperatura < 15.5 Eche llevar_chaqueta
+Si saldo >= 50000 Tin tiene_permiso = Melo Eche mostrar "Nombre de Dios, nos pillamos"

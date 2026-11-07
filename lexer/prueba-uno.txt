@@ -1,0 +1,15 @@
+Pille a :=  11
+Pille b := 12
+Pille c := (a+b)*2
+
+
+System.out
+
+Si a == b Eche "Melo"
+
+//Si a ! b Eche "Melo"
+
+Pille nueva := 1 /*1
+2,
+3
+*/
