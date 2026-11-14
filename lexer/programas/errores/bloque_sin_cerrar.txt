@@ -1,0 +1,3 @@
+Pille n := 1
+Si n < 2 Eche {
+    mostrar(n)

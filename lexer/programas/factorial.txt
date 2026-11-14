@@ -1,0 +1,8 @@
+// Factorial de 5
+Pille n := 5
+Pille resultado := 1
+Dele n > 1 Eche {
+    resultado := resultado * n
+    n := n - 1
+}
+mostrar(resultado)

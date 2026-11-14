@@ -1,4 +1,4 @@
-# Pruebas del lexer de ColombiaScript (puntos 4 a 6.1 y tareas 8 a 16).
+# Pruebas de ColombiaScript: lexer, parser, árbol, intérprete y requerimientos finales.
 #
 #     python pruebas.py
 #
@@ -6,11 +6,21 @@
 # carácter de la pieza, contando desde 1 en cada línea). Después se compara con la
 # salida real del lexer.
 
+import builtins
+import io
+import os
 import sys
+from contextlib import redirect_stdout
 
+import main
+from interprete import Interprete
 from lexer import tokenizar
-from main import mostrar_tabla
+from main import imprimir_tokens
+from parser import Parser
 from tokens import Token, ErrorLexico
+
+CARPETA = os.path.dirname(os.path.abspath(__file__))
+RUTA_EJEMPLO = os.path.join(CARPETA, "programas", "ejemplo.txt")
 
 resultados = []
 
@@ -57,6 +67,22 @@ def verificar(punto, nombre, entrada, esperado, real):
     print()
 
 
+def correr(codigo, modo="ejecutar", entradas=None):
+    # Pasa el código por main.ejecutar (las tres fases) y devuelve lo que se imprimió,
+    # línea por línea. entradas: lo que "escribiría" el usuario cuando el programa usa leer().
+    teclado = iter(entradas or [])
+    interprete = Interprete(entrada=lambda pregunta: next(teclado))
+    salida = io.StringIO()
+    with redirect_stdout(salida):
+        main.ejecutar(codigo, interprete, modo)
+    return salida.getvalue().splitlines()
+
+
+def primera(codigo):
+    # Solo la primera línea de la salida (el mensaje de un error)
+    return correr(codigo)[:1]
+
+
 def probar(punto, nombre, entrada, esperado):
     # esperado es una lista de Token, o un texto si se espera un error léxico
     try:
@@ -89,7 +115,7 @@ probar("5", "declaración sin espacios alrededor de :=",
 probar("5", ">= se lee completo (el símbolo más largo primero)",
        "Si edad >= 18",
        toks(("RESERVADA", "Si", 1, 1), ("IDENTIFICADOR", "edad", 1, 4),
-            ("RELACIONAL", ">=", 1, 9), ("NUMERO", "18", 1, 12), ("EOF", "", 1, 14)))
+            ("COMPARADOR", ">=", 1, 9), ("NUMERO", "18", 1, 12), ("EOF", "", 1, 14)))
 probar("5", "asignación estilo Java (=) produce error",
        "Pille edad = 18",
        "Error léxico en línea 1, columna 12: la asignación se escribe ':=' (el '=' solo sirve para comparar)")
@@ -160,18 +186,18 @@ probar("8", "punto sin dígito detrás no es decimal",
 
 probar("9", "x == 5 da 3 tokens (más EOF)",
        "x == 5",
-       toks(("IDENTIFICADOR", "x", 1, 1), ("RELACIONAL", "==", 1, 3),
+       toks(("IDENTIFICADOR", "x", 1, 1), ("COMPARADOR", "==", 1, 3),
             ("NUMERO", "5", 1, 6), ("EOF", "", 1, 7)))
 probar("9", "x = = 5 da 4 tokens (más EOF)",
        "x = = 5",
-       toks(("IDENTIFICADOR", "x", 1, 1), ("RELACIONAL", "=", 1, 3),
-            ("RELACIONAL", "=", 1, 5), ("NUMERO", "5", 1, 7), ("EOF", "", 1, 8)))
+       toks(("IDENTIFICADOR", "x", 1, 1), ("COMPARADOR", "=", 1, 3),
+            ("COMPARADOR", "=", 1, 5), ("NUMERO", "5", 1, 7), ("EOF", "", 1, 8)))
 probar("9", "!= <= >= < >",
        "a != b <= c >= d < e > f",
-       toks(("IDENTIFICADOR", "a", 1, 1), ("RELACIONAL", "!=", 1, 3), ("IDENTIFICADOR", "b", 1, 6),
-            ("RELACIONAL", "<=", 1, 8), ("IDENTIFICADOR", "c", 1, 11), ("RELACIONAL", ">=", 1, 13),
-            ("IDENTIFICADOR", "d", 1, 16), ("RELACIONAL", "<", 1, 18), ("IDENTIFICADOR", "e", 1, 20),
-            ("RELACIONAL", ">", 1, 22), ("IDENTIFICADOR", "f", 1, 24), ("EOF", "", 1, 25)))
+       toks(("IDENTIFICADOR", "a", 1, 1), ("COMPARADOR", "!=", 1, 3), ("IDENTIFICADOR", "b", 1, 6),
+            ("COMPARADOR", "<=", 1, 8), ("IDENTIFICADOR", "c", 1, 11), ("COMPARADOR", ">=", 1, 13),
+            ("IDENTIFICADOR", "d", 1, 16), ("COMPARADOR", "<", 1, 18), ("IDENTIFICADOR", "e", 1, 20),
+            ("COMPARADOR", ">", 1, 22), ("IDENTIFICADOR", "f", 1, 24), ("EOF", "", 1, 25)))
 probar("9", "! solo (sin =) es error léxico",
        "x ! 5",
        "Error léxico en línea 1, columna 3: carácter '!' no reconocido")
@@ -296,7 +322,7 @@ verificar("14", "ErrorLexico se atrapa con try/except y expone línea y columna"
 
 # ---------------- Tarea 16: ejemplo.txt ----------------
 
-with open("ejemplo.txt", encoding="utf-8") as f:
+with open(RUTA_EJEMPLO, encoding="utf-8") as f:
     ejemplo = f.read()
 tokens_ejemplo = tokenizar(ejemplo)
 verificar("16", "ejemplo.txt tiene al menos 10 líneas y se tokeniza sin errores", "ejemplo.txt",
@@ -312,13 +338,250 @@ verificar("16", "los tokens de las líneas 2 y 3 coinciden con lo calculado a ma
           "\n".join(ejemplo.splitlines()[:3]),
           esperado_ejemplo, tokens_ejemplo[:len(esperado_ejemplo)])
 
-# ---------------- Tabla completa de ejemplo.txt (lo que imprime main.py) ----------------
+# ---------------- Sesión 3, punto 3: clase Parser ----------------
 
-print("=" * 78)
-print("TABLA COMPLETA DE ejemplo.txt (la misma que muestra: python main.py ejemplo.txt)")
-print("=" * 78)
-mostrar_tabla(tokens_ejemplo)
-print()
+p = Parser(tokenizar("Pille x := 5"))
+verificar("Parser", "el Parser guarda la lista de tokens y empieza en la posición 0", "Pille x := 5",
+          ["len(p.tokens)=5", "p.pos=0"],
+          [f"len(p.tokens)={len(p.tokens)}", f"p.pos={p.pos}"])
+verificar("Parser", "actual() mira el token SIN moverse (dos llamadas dan lo mismo)", "Pille x := 5",
+          ["TIPO('Pille') en 1:1", "TIPO('Pille') en 1:1", "pos=0"],
+          [str(p.actual()), str(p.actual()), f"pos={p.pos}"])
+devuelto = p.avanzar()
+verificar("Parser", "avanzar() devuelve el token actual y pasa al siguiente", "Pille x := 5",
+          ["devuelto=TIPO('Pille') en 1:1", "actual=IDENTIFICADOR('x') en 1:7", "pos=1"],
+          [f"devuelto={devuelto}", f"actual={p.actual()}", f"pos={p.pos}"])
+
+for _ in range(10):                 # muchas más veces de las que hay tokens
+    p.avanzar()
+verificar("Parser", "en EOF avanzar() ya no se mueve (no se sale de la lista)", "Pille x := 5",
+          ["actual=EOF('') en 1:13", "pos=4"],
+          [f"actual={p.actual()}", f"pos={p.pos}"])
+
+# Pregunta de la sustentación: dos objetos Parser con listas distintas, se avanza solo uno.
+p1 = Parser(tokenizar("Pille a := 1"))
+p2 = Parser(tokenizar("Si a == 1 Eche b"))
+p1.avanzar()
+p1.avanzar()
+verificar("Parser", "dos objetos Parser son independientes: avanzar p1 no mueve a p2",
+          "p1: Pille a := 1   p2: Si a == 1 Eche b",
+          ["p1.pos=2", "p1.actual=ASIGNACION(':=') en 1:9", "p2.pos=0", "p2.actual=RESERVADA('Si') en 1:1"],
+          [f"p1.pos={p1.pos}", f"p1.actual={p1.actual()}", f"p2.pos={p2.pos}", f"p2.actual={p2.actual()}"])
+
+# Lo que imprime main.py con programa.txt (calculado a mano)
+salida = io.StringIO()
+with redirect_stdout(salida):
+    imprimir_tokens(Parser(tokenizar("Pille x := 5")))
+verificar("Parser", "main.py recorre con el Parser e imprime TODOS los tokens, incluido EOF", "Pille x := 5",
+          ["TIPO('Pille') en 1:1", "IDENTIFICADOR('x') en 1:7", "ASIGNACION(':=') en 1:9",
+           "NUMERO('5') en 1:12", "EOF('') en 1:13"],
+          salida.getvalue().splitlines())
+
+# ================= 13 de noviembre: el parser construye un árbol =================
+
+verificar("Árbol", "programa.txt de la guía: dos declaraciones", "Pille edad := 20\nPille nota := edad / 4.0",
+          ["Programa",
+           "  Declaracion Pille edad",
+           "    Numero 20",
+           "  Declaracion Pille nota",
+           "    OperacionBinaria /",
+           "      Variable edad",
+           "      Numero 4.0"],
+          correr("Pille edad := 20\nPille nota := edad / 4.0", "arbol"))
+verificar("Árbol", "la resta se agrupa por la izquierda: (10 - 3) - 2", "Pille r := 10 - 3 - 2",
+          ["Programa",
+           "  Declaracion Pille r",
+           "    OperacionBinaria -",
+           "      OperacionBinaria -",
+           "        Numero 10",
+           "        Numero 3",
+           "      Numero 2"],
+          correr("Pille r := 10 - 3 - 2", "arbol"))
+verificar("Árbol", "la multiplicación queda más abajo que la suma", "Pille total := a + 5 * 2",
+          ["Programa",
+           "  Declaracion Pille total",
+           "    OperacionBinaria +",
+           "      Variable a",
+           "      OperacionBinaria *",
+           "        Numero 5",
+           "        Numero 2"],
+          correr("Pille total := a + 5 * 2", "arbol"))
+verificar("Árbol", "Tan queda arriba de Tin, y Tin arriba de la comparación", "Si a > 1 Tin Nel b Tan c Eche { }",
+          ["Programa",
+           "  Si",
+           "    Logica Tan",
+           "      Logica Tin",
+           "        Comparacion >",
+           "          Variable a",
+           "          Numero 1",
+           "        Negacion Nel",
+           "          Variable b",
+           "      Variable c",
+           "    Eche"],
+          correr("Si a > 1 Tin Nel b Tan c Eche { }", "arbol"))
+
+# ================= Entregable 14 de noviembre: errores sintácticos =================
+
+verificar("Sintaxis", "falta el valor después de :=", "Pille x :=",
+          ["Error sintáctico en línea 1, columna 11: se esperaba un número, una variable o '(' y llegó el fin del archivo"],
+          primera("Pille x :="))
+verificar("Sintaxis", "dos operadores seguidos", "Pille y := 4 + * 2",
+          ["Error sintáctico en línea 1, columna 16: se esperaba un número, una variable o '(' y llegó '*'"],
+          primera("Pille y := 4 + * 2"))
+verificar("Sintaxis", "paréntesis sin cerrar", "Pille z := (1 + 2\nmostrar(z)",
+          ["Error sintáctico en línea 2, columna 1: se esperaba ')' y llegó 'mostrar'"],
+          primera("Pille z := (1 + 2\nmostrar(z)"))
+verificar("Sintaxis", "falta el nombre de la variable", "Pille := 5",
+          ["Error sintáctico en línea 1, columna 7: se esperaba un IDENTIFICADOR y llegó ':='"],
+          primera("Pille := 5"))
+verificar("Sintaxis", "el condicional necesita Eche", "Si a > 1 { }",
+          ["Error sintáctico en línea 1, columna 10: se esperaba 'Eche' y llegó '{'"],
+          primera("Si a > 1 { }"))
+verificar("Sintaxis", "una instrucción no puede empezar con un número", "Pille x := 5 6",
+          ["Error sintáctico en línea 1, columna 14: se esperaba el inicio de una instrucción y llegó '6'"],
+          primera("Pille x := 5 6"))
+
+# ================= 14 de noviembre: el programa se ejecuta =================
+
+verificar("Ejecución", "a + 5 * 2 con a = 3 da 13", "Pille a := 3\nPille total := a + 5 * 2\nmostrar(total)",
+          ["13"], correr("Pille a := 3\nPille total := a + 5 * 2\nmostrar(total)"))
+codigo_tipos = 'mostrar(7 / 2)\nmostrar(7 / 2.0)\nmostrar("ho" + "la")\nmostrar("hola" * 2)'
+verificar("Ejecución", "operaciones entre tipos: se detiene en el *", codigo_tipos,
+          ["3", "3.5", "hola", "Error semántico en línea 4, columna 16: no se puede usar '*' con textos"],
+          correr(codigo_tipos)[:4])
+verificar("Ejecución", "decisión de diseño: texto + número/booleano se unen", 'mostrar("Total: " + 3 + " " + Melo)',
+          ["Total: 3 Melo"], correr('mostrar("Total: " + 3 + " " + Melo)'))
+verificar("Ejecución", "la división entera corta hacia cero, como en Java", "mostrar(-7 / 2)",
+          ["-3"], correr("mostrar(-7 / 2)"))
+verificar("Semántica", "usar una variable no declarada", "mostrar(edad)",
+          ["Error semántico en línea 1, columna 9: la variable 'edad' no ha sido declarada"],
+          primera("mostrar(edad)"))
+verificar("Semántica", "declarar dos veces la misma variable", "Pille x := 1\nPille x := 2",
+          ["Error semántico en línea 2, columna 7: la variable 'x' ya fue declarada en la línea 1"],
+          primera("Pille x := 1\nPille x := 2"))
+verificar("Semántica", "guardar un valor de otro tipo", 'Pille n := 5\nn := "hola"',
+          ["Error semántico en línea 2, columna 1: no se puede guardar un texto en la variable 'n' de tipo entero"],
+          primera('Pille n := 5\nn := "hola"'))
+verificar("Semántica", "un decimal acepta enteros (y los vuelve decimales)", "Pille p := 2.5\np := 3\nmostrar(p)",
+          ["3.0"], correr("Pille p := 2.5\np := 3\nmostrar(p)"))
+verificar("Semántica", "división por cero", "Pille d := 10 / 0",
+          ["Error semántico en línea 1, columna 15: división por cero"],
+          primera("Pille d := 10 / 0"))
+verificar("Semántica", "lo anterior al error ya se mostró", "Pille a := 5\nmostrar(a)\nmostrar(b)",
+          ["5", "Error semántico en línea 3, columna 9: la variable 'b' no ha sido declarada"],
+          correr("Pille a := 5\nmostrar(a)\nmostrar(b)")[:2])
+verificar("Errores", "main.py: mensaje, línea con ^ y línea/columna por separado", "Pille x := 5 @",
+          ["Error léxico en línea 1, columna 14: carácter '@' no reconocido",
+           "    Pille x := 5 @",
+           "                 ^",
+           "linea = 1, columna = 14"],
+          correr("Pille x := 5 @"))
+codigo_20 = ('Pille precio := 12000\nPille cantidad := 3\nPille total := precio * cantidad\n'
+             'mostrar(total)\nPille promedio := total / 4.0\nmostrar(promedio)\n'
+             'Pille mensaje := "Fin del calculo"\nmostrar(mensaje)')
+verificar("Ejecución", "salida esperada del entregable del 20 de noviembre", codigo_20,
+          ["36000", "9000.0", "Fin del calculo"], correr(codigo_20))
+
+# ================= 20 de noviembre: las siete comprobaciones =================
+
+verificar("Control", "1. el lexer separa == de := (en ColombiaScript la asignación es :=)", "a == b  /  a := b",
+          ["COMPARADOR('==') en 1:3", "ASIGNACION(':=') en 1:3"],
+          [correr("a == b", "tokens")[1], correr("a := b", "tokens")[1]])
+verificar("Control", "2. condicional con Sino", 'Si 2 > 1 Eche { mostrar("si") } Sino { mostrar("no") }',
+          ["si"], correr('Si 2 > 1 Eche { mostrar("si") } Sino { mostrar("no") }'))
+verificar("Control", "3. condicional sin Sino", 'Si 1 > 2 Eche { mostrar("si") } mostrar("fin")',
+          ["fin"], correr('Si 1 > 2 Eche { mostrar("si") } mostrar("fin")'))
+verificar("Control", "4. ciclo Dele", "Pille n := 1 Dele n <= 3 Eche { mostrar(n) n := n + 1 }",
+          ["1", "2", "3"], correr("Pille n := 1 Dele n <= 3 Eche { mostrar(n) n := n + 1 }"))
+codigo_anidado = "Pille n := 1 Dele n <= 4 Eche { Si n > 2 Eche { mostrar(n) } n := n + 1 }"
+verificar("Control", "5. un bloque dentro de otro", codigo_anidado, ["3", "4"], correr(codigo_anidado))
+verificar("Control", "6. bloque sin cerrar", "Si 1 < 2 Eche { mostrar(1)",
+          ["Error sintáctico en línea 1, columna 27: falta '}' para cerrar el bloque abierto en la línea 1"],
+          primera("Si 1 < 2 Eche { mostrar(1)"))
+salida_infinita = correr("Pille n := 1 Dele n <= 3 Eche { mostrar(n) }")
+verificar("Control", "7. ciclo infinito: muchos 1 y después el error", "Pille n := 1 Dele n <= 3 Eche { mostrar(n) }",
+          ["100000 veces '1'",
+           "Error semántico en línea 1, columna 14: el ciclo superó 100000 vueltas; "
+           "¿falta actualizar la variable de la condición?"],
+          [f"{salida_infinita.count('1')} veces '1'", salida_infinita[100000]])
+codigo_final = ("Pille n := 1\nPille suma := 0\nDele n <= 5 Eche {\n    suma := suma + n\n    n := n + 1\n}\n"
+                "mostrar(suma)\nSi suma > 10 Eche {\n    mostrar(\"grande\")\n} Sino {\n    mostrar(\"pequeño\")\n}")
+verificar("Control", "programa completo del 20 de noviembre", codigo_final,
+          ["15", "grande"], correr(codigo_final))
+
+# ================= Requerimientos obligatorios =================
+
+codigo_alcance = "Si 1 < 2 Eche {\n    Pille x := 5\n}\nmostrar(x)"
+verificar("Req 1", "alcance de bloques: x deja de existir al cerrar el bloque", codigo_alcance,
+          ["Error semántico en línea 4, columna 9: la variable 'x' no ha sido declarada"],
+          primera(codigo_alcance))
+verificar("Req 1", "desde un bloque sí se ve (y se cambia) la variable de afuera",
+          "Pille a := 1 Si Melo Eche { a := a + 1 } mostrar(a)",
+          ["2"], correr("Pille a := 1 Si Melo Eche { a := a + 1 } mostrar(a)"))
+codigo_logico = 'Pille n := 7\nSi n >= 1 Tin n <= 10 Eche {\n    mostrar("en rango")\n}'
+verificar("Req 2", "Tin (y): n entre 1 y 10", codigo_logico, ["en rango"], correr(codigo_logico))
+verificar("Req 2", "Tan (o) y Nel (no)", "mostrar(Paila Tan Melo) mostrar(Nel Melo) mostrar(Nel 1 > 2 Tin Melo)",
+          ["Melo", "Paila", "Melo"], correr("mostrar(Paila Tan Melo) mostrar(Nel Melo) mostrar(Nel 1 > 2 Tin Melo)"))
+verificar("Req 2", "Tin necesita booleanos", "mostrar(1 Tin Melo)",
+          ["Error semántico en línea 1, columna 11: 'Tin' necesita una condición que dé Melo o Paila y recibió un entero"],
+          primera("mostrar(1 Tin Melo)"))
+codigo_negativos = "Pille x := -5\nPille y := -(x + 2)\nmostrar(y)"
+verificar("Req 3", "números negativos y menos unario", codigo_negativos, ["3"], correr(codigo_negativos))
+verificar("Req 3", "a - 5 sigue siendo una resta", "Pille a := 8 mostrar(a-5)", ["3"], correr("Pille a := 8 mostrar(a-5)"))
+verificar("Req 4", "el error señala el código con ^", "Pille a := 1\nmostrar(edad)",
+          ["Error semántico en línea 2, columna 9: la variable 'edad' no ha sido declarada",
+           "    mostrar(edad)",
+           "            ^",
+           "linea = 2, columna = 9"],
+          correr("Pille a := 1\nmostrar(edad)"))
+
+# ================= Requerimientos electivos =================
+
+verificar("Booleano", "una comparación se guarda en una variable", "Pille n := 5 Pille listo := n > 3 mostrar(listo)",
+          ["Melo"], correr("Pille n := 5 Pille listo := n > 3 mostrar(listo)"))
+verificar("Booleano", "Melo no es un entero (type y no isinstance)", "Pille n := 5 n := Melo",
+          ["Error semántico en línea 1, columna 14: no se puede guardar un booleano en la variable 'n' de tipo entero"],
+          primera("Pille n := 5 n := Melo"))
+verificar("Booleano", "Si exige una condición booleana", "Si 5 Eche { }",
+          ["Error semántico en línea 1, columna 1: 'Si' necesita una condición que dé Melo o Paila y recibió un entero"],
+          primera("Si 5 Eche { }"))
+verificar("Cuente", "ciclo con contador, i solo existe adentro", "Cuente i Desde 1 Hasta 3 Eche { mostrar(i) } mostrar(i)",
+          ["1", "2", "3", "Error semántico en línea 1, columna 54: la variable 'i' no ha sido declarada"],
+          correr("Cuente i Desde 1 Hasta 3 Eche { mostrar(i) } mostrar(i)")[:4])
+verificar("Cuente", "los límites deben ser enteros", "Cuente i Desde 1 Hasta 2.5 Eche { }",
+          ["Error semántico en línea 1, columna 1: Cuente necesita números enteros y recibió un decimal"],
+          primera("Cuente i Desde 1 Hasta 2.5 Eche { }"))
+verificar("Leer", "Pille x := leer() deduce el tipo de lo escrito", 'Pille e := leer() mostrar(e + 1)   (escribe 20)',
+          ["21"], correr("Pille e := leer() mostrar(e + 1)", entradas=["20"]))
+verificar("Leer", "x := leer() convierte al tipo de x, con error si no se puede", "Pille n := 0\nn := leer()   (escribe abc)",
+          ["Error semántico en línea 2, columna 6: no se puede convertir 'abc' a entero"],
+          correr("Pille n := 0\nn := leer()", entradas=["abc"])[:1])
+
+# Modo interactivo: se simula lo que el usuario escribe reemplazando input()
+lineas_usuario = iter(["Pille a := 2", "Dele a < 4 Eche {", "a := a + 1", "}", "mostrar(a)", "chao"])
+input_original = builtins.input
+builtins.input = lambda prompt="": next(lineas_usuario)
+salida = io.StringIO()
+try:
+    with redirect_stdout(salida):
+        main.modo_interactivo()
+finally:
+    builtins.input = input_original
+verificar("Interactivo", "recuerda variables entre líneas y espera a que se cierre el bloque",
+          "Pille a := 2 / Dele a < 4 Eche { / a := a + 1 / } / mostrar(a) / chao",
+          ["ColombiaScript - modo interactivo. Escriba 'chao' para salir.", "4", "Nombre de Dios, nos pillamos."],
+          salida.getvalue().splitlines())
+
+# ================= Programas de muestra (presentación del lenguaje) =================
+
+for archivo, esperado in [("tabla_del_3.txt", ["3", "6", "9", "12", "15"]),
+                          ("factorial.txt", ["120"]),
+                          ("promedio.txt", ["4.0", "aprueba"])]:
+    with open(os.path.join(CARPETA, "programas", archivo), encoding="utf-8") as f:
+        verificar("Muestras", f"programas/{archivo}", archivo, esperado, correr(f.read()))
+verificar("Muestras", "programas/ejemplo.txt se ejecuta completo", "ejemplo.txt",
+          ["Puede entrar", "Encendiendo el ventilador", "Saldo disponible: 45000.0", "Deuda: 0, saldo: 25000.0"],
+          correr(ejemplo))
 
 # ---------------- Resumen ----------------
 

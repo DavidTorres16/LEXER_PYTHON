@@ -1,0 +1,30 @@
+// Programa de demostración de ColombiaScript: asistente de decisiones
+Pille edad := 20
+Pille temperatura := 31.5
+Pille saldo := 45000.0
+Pille deuda := -20000
+Pille tiene_permiso := Melo
+Pille esta_lloviendo := Paila
+
+/* Reglas del sistema:
+   cada una empieza con Si y su acción va después de Eche
+   Tin es Y, Tan es O, Nel es NO */
+Si edad >= 18 Eche { mostrar("Puede entrar") }
+Si temperatura >= 30 Eche { mostrar("Encendiendo el ventilador") }
+Si saldo <= 0 Eche {
+    mostrar("Paila, no hay lucas")
+} Sino {
+    mostrar("Saldo disponible: " + saldo)
+}
+Si Nel tiene_permiso Tin edad < 18 Eche { mostrar("Entrada negada") } // menor y sin permiso
+Si esta_lloviendo == Melo Tan temperatura < 15.5 Eche { mostrar("Lleve chaqueta") }
+Si saldo >= 50000 Tin tiene_permiso Eche {
+    mostrar("Nombre de Dios, nos pillamos")
+}
+
+// Pagar la culebra (deuda) en cuotas de 5000 mientras haya saldo
+Dele deuda < 0 Tin saldo >= 5000 Eche {
+    deuda := deuda + 5000
+    saldo := saldo - 5000
+}
+mostrar("Deuda: " + deuda + ", saldo: " + saldo)

@@ -1,0 +1,3 @@
+Pille edad := 20
+Pille total := (edad + 5
+mostrar(total)

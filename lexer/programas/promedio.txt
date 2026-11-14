@@ -1,0 +1,8 @@
+// Promedio de tres notas
+Pille promedio := (3.0 + 4.0 + 5.0) / 3.0
+mostrar(promedio)
+Si promedio >= 3.0 Eche {
+    mostrar("aprueba")
+} Sino {
+    mostrar("reprueba")
+}

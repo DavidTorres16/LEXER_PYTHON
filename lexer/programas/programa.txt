@@ -1,0 +1,2 @@
+Pille edad := 20
+Pille nota := edad / 4.0

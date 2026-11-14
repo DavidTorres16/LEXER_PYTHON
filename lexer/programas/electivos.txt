@@ -1,0 +1,9 @@
+// Electivos: tipo booleano, ciclo for (Cuente) y lectura de datos (leer)
+Pille edad := leer("¿Cuántos años tiene? ")
+Pille mayor := edad >= 18
+mostrar("¿Es mayor de edad? " + mayor)
+Si mayor Eche { mostrar("Puede entrar") } Sino { mostrar("Paila nea, el cucho dijo que no") }
+
+Cuente i Desde 1 Hasta 3 Eche {
+    mostrar("Vuelta " + i)
+}

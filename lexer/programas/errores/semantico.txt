@@ -1,0 +1,3 @@
+Pille edad := 20
+mostrar(edad)
+mostrar(saldo)

@@ -1,0 +1,6 @@
+// Tabla de multiplicar del 3
+Pille n := 1
+Dele n <= 5 Eche {
+    mostrar(n * 3)
+    n := n + 1
+}
